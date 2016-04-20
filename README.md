@@ -1,2 +1,2 @@
 # LanzoniLucaJPL1
-JPL Master's Thesis by Luca Lanzonis
+JPL Master's Thesis by Luca Lanzoni
