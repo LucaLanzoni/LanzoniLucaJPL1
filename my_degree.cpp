@@ -33,6 +33,7 @@
 #include "chrono/particlefactory/ChParticleEmitter.h"
 #include "chrono/assets/ChTexture.h"
 #include "chrono/assets/ChColorAsset.h"
+#include "chrono/physics/ChBodyEasy.h"
 
 #include "chrono_irrlicht/ChIrrApp.h"
 
@@ -83,7 +84,7 @@ int main(int argc, char* argv[]) {
 	ChIrrWizard::add_typical_Logo(application.GetDevice());
 	ChIrrWizard::add_typical_Sky(application.GetDevice());
 	ChIrrWizard::add_typical_Lights(application.GetDevice());
-	ChIrrWizard::add_typical_Camera(application.GetDevice(), core::vector3df(0, 14, -20));
+	ChIrrWizard::add_typical_Camera(application.GetDevice(), core::vector3df(0, 7, -10));
 
 	//
 	// CREATE THE SYSTEM OBJECTS
@@ -188,6 +189,55 @@ int main(int argc, char* argv[]) {
 	// d- attach the callback to the emitter!
 	emitter.SetCallbackPostCreation(mcreation_callback);
 
+	// Class for a custom asset (ex. an optical property)
+	class MyProperty : public ChAsset {
+	public:
+		double reflection;
+	};
+
+	///// Create particles 'the easy way'
+	for (int i = 0; i <= 20; ++i) {
+
+		/// make a sphere
+
+		auto my_sphere = std::make_shared<ChBodyEasySphere>(0.2, 1000, true, true);
+		mphysicalSystem.Add(my_sphere);
+
+		my_sphere->SetPos(ChVector<>(ChRandom(), ChRandom(), ChRandom())*10);
+
+		auto my_color = std::make_shared<ChColorAsset>(0,1,0); // rgb
+		my_sphere->AddAsset(my_color);
+
+		/// make a convex hull
+
+		std::vector<ChVector<>> set_of_points;
+		set_of_points.push_back(ChVector<>(0.40, 0.00, 0.00));
+		set_of_points.push_back(ChVector<>(0.00, 0.4, 0.00));
+		set_of_points.push_back(ChVector<>(0.00, 0.00, 0.4));
+		set_of_points.push_back(ChVector<>(0.00, 0.00, 0.00));
+		set_of_points.push_back(ChVector<>(0.00, 0.00, 0.4));
+
+		auto my_hull = std::make_shared<ChBodyEasyConvexHull>(
+			set_of_points,
+			1000,  //  density
+			true,  //  collide?
+			true); //  visualize?	
+		
+		mphysicalSystem.Add(my_hull);
+
+		my_hull->SetPos(ChVector<>(ChRandom(), ChRandom(), ChRandom()) * 10);
+		my_hull->SetRot(ChQuaternion<>(ChRandom(), ChRandom(), ChRandom(), ChRandom()).GetNormalized() );
+
+		// create a custom asset
+		auto shape_property = std::make_shared<MyProperty>();
+		shape_property->reflection = ChRandom()*100.33;
+		my_hull->AddAsset(shape_property);
+	}
+	
+
+
+
+
 	// Use this function for adding a ChIrrNodeAsset to all already created items (ex. a floor, a wall, etc.)
 	// Otherwise use application.AssetBind(myitem); on a per-item basis, as in the creation callback.
 	application.AssetBindAll();
@@ -209,6 +259,8 @@ int main(int argc, char* argv[]) {
 	//
 	// THE SOFT-REAL-TIME CYCLE
 	//
+	ChStreamOutAsciiFile my_results("results.txt"); // apre un file
+	int save_each = 10;
 
 	while (application.GetDevice()->run()) {
 		application.GetVideoDriver()->beginScene(true, true, SColor(255, 140, 161, 192));
@@ -227,7 +279,7 @@ int main(int argc, char* argv[]) {
 
 		// B) store user computed force:
 		// double G_constant = 6.674e-11; // gravitational constant
-		double G_constant = 6.674e-3;  // gravitational constant - HACK to speed up simulation
+		double G_constant = 6.674e-5;  // gravitational constant - HACK to speed up simulation
 		for (unsigned int i = 0; i < mphysicalSystem.Get_bodylist()->size(); i++) {
 			auto abodyA = (*mphysicalSystem.Get_bodylist())[i];
 			for (unsigned int j = i + 1; j < mphysicalSystem.Get_bodylist()->size(); j++) {
@@ -242,10 +294,37 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
+		if (mphysicalSystem.GetStepcount() % save_each == 0)
+			my_results << mphysicalSystem.GetChTime() << " ";
+
+		for (unsigned int i = 0; i < mphysicalSystem.Get_bodylist()->size(); i++) {
+			auto abodyA = (*mphysicalSystem.Get_bodylist())[i];
+
+			for (auto generic_asset : abodyA->GetAssets()) {
+				if (auto optical_asset = std::dynamic_pointer_cast<MyProperty>(generic_asset)) {
+					// if we found a MyProperty apply a force!
+					abodyA->Accumulate_force( ChVector<>(0, optical_asset->reflection,0), abodyA->GetPos(), false);
+					// ..also save x y z on disk
+					if (mphysicalSystem.GetStepcount() % save_each == 0) {
+						my_results
+							<< abodyA->GetPos().x << " "
+							<< abodyA->GetPos().y << " "
+							<< abodyA->GetPos().z << " "
+							<< abodyA->GetPos_dt().x << " "
+							<< abodyA->GetPos_dt().y << " "
+							<< abodyA->GetPos_dt().z << " ";
+					}
+				}
+			}
+		}
+
 		// Perform the integration timestep
 		application.DoStep();
 
 		application.GetVideoDriver()->endScene();
+
+		if (mphysicalSystem.GetStepcount() % save_each == 0)
+			my_results << "\n";
 	}
 
 	return 0;
