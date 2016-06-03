@@ -37,6 +37,11 @@
 
 #include "chrono_irrlicht/ChIrrApp.h"
 
+// for M_PI
+#define _USE_MATH_DEFINES
+#include <math.h>
+
+
 // Use the main namespace of Chrono, and other chrono namespaces
 using namespace chrono;
 using namespace chrono::particlefactory;
@@ -94,12 +99,13 @@ int main(int argc, char* argv[]) {
 	// functions it also sets mass and inertia tensor for you, and collision
 	// and visualization shapes are added automatically)
 
-	auto msphereBody = std::make_shared<ChBodyEasySphere>(2.1,    // radius size
-		1800,   // density
+	auto msphereBody = std::make_shared<ChBodyEasySphere>(3.1,    // radius size
+		5000,   // density
 		true,   // collide enable?
 		true);  // visualization?
-	msphereBody->SetPos(ChVector<>(1, 1, 0));
+	msphereBody->SetPos(ChVector<>(0, 0, 0));
 	msphereBody->GetMaterialSurface()->SetFriction(0.2f);
+
 
 	// optional: add further assets, ex for improving visualization:
 	auto mtexture = std::make_shared<ChTexture>();
@@ -113,6 +119,8 @@ int main(int argc, char* argv[]) {
 	// However there is an easier way to the creation of cluster of particles,
 	// namely the ChEmitter helper class. Here we show hof to use it.
 
+	//Emitter
+	/*
 	// Create an emitter:
 
 	ChParticleEmitter emitter;
@@ -125,7 +133,7 @@ int main(int argc, char* argv[]) {
 	emitter.ParticlesPerSecond() = 2000;
 
 	emitter.SetUseParticleReservoir(true);
-	emitter.ParticleReservoirAmount() = 200;
+	emitter.ParticleReservoirAmount() = 0;
 
 	// Our ChParticleEmitter object, among the main settings, it requires
 	// that you give him four 'randomizer' objects: one is in charge of
@@ -159,24 +167,26 @@ int main(int argc, char* argv[]) {
 
 	// ---Initialize the randomizer for CREATED SHAPES, with statistical distribution
 
-	/*
+	
 	// Create a ChRandomShapeCreator object (ex. here for sphere particles)
 	auto mcreator_spheres = std::make_shared<ChRandomShapeCreatorSpheres>();
-	mcreator_spheres->SetDiameterDistribution(std::make_shared<ChZhangDistribution>(0.6, 0.23));
+	mcreator_spheres->SetDiameterDistribution(std::make_shared<ChZhangDistribution>(0.4, 0.2));
 	mcreator_spheres->SetDensityDistribution(std::make_shared<ChConstantDistribution>(1600));
 
 	// Finally, tell to the emitter that it must use the creator above:
 	emitter.SetParticleCreator(mcreator_spheres);
 	*/
 	
+	/*
 	// ..as an alternative: create odd shapes with convex hulls, like faceted fragments:
 	auto mcreator_hulls = std::make_shared<ChRandomShapeCreatorConvexHulls>();
 	mcreator_hulls->SetNpoints(15);
 	mcreator_hulls->SetChordDistribution(std::make_shared<ChZhangDistribution>(1.3, 0.4));
 	mcreator_hulls->SetDensityDistribution(std::make_shared<ChConstantDistribution>(1600));
 	emitter.SetParticleCreator(mcreator_hulls);
-	
+	*/
 
+	/*
 	// --- Optional: what to do by default on ALL newly created particles?
 	//     A callback executed at each particle creation can be attached to the emitter.
 	//     For example, we need that new particles will be bound to Irrlicht visualization:
@@ -188,6 +198,7 @@ int main(int argc, char* argv[]) {
 	mcreation_callback->airrlicht_application = &application;
 	// d- attach the callback to the emitter!
 	emitter.SetCallbackPostCreation(mcreation_callback);
+	*/
 
 	// Class for a custom asset (ex. an optical property)
 	class MyProperty : public ChAsset {
@@ -195,19 +206,28 @@ int main(int argc, char* argv[]) {
 		double reflection;
 	};
 
+	
 	///// Create particles 'the easy way'
-	for (int i = 0; i <= 20; ++i) {
+	for (int i = 0; i <= 0; ++i) {
 
 		/// make a sphere
 
-		auto my_sphere = std::make_shared<ChBodyEasySphere>(0.2, 1000, true, true);
+		auto my_sphere = std::make_shared<ChBodyEasySphere>(0.1, 500, true, true);
+		my_sphere->GetMaterialSurface()->SetFriction(0.2f);
+
 		mphysicalSystem.Add(my_sphere);
 
-		my_sphere->SetPos(ChVector<>(ChRandom(), ChRandom(), ChRandom())*10);
+		my_sphere->SetPos(ChVector<>(i + i*7 + 7, 0 , 0));
+		double G_const = 6.67384e-11;   //G_const = 6.67384e-11 the true one
+		double mu = msphereBody->GetMass() * G_const;
+		double virad = mu / my_sphere->GetPos().x;
+		double vi = sqrt(virad);
+		my_sphere->SetPos_dt(ChVector<>(0 , vi, 0));
 
 		auto my_color = std::make_shared<ChColorAsset>(0,1,0); // rgb
 		my_sphere->AddAsset(my_color);
-
+		
+		/*
 		/// make a convex hull
 
 		std::vector<ChVector<>> set_of_points;
@@ -224,18 +244,26 @@ int main(int argc, char* argv[]) {
 			true); //  visualize?	
 		
 		mphysicalSystem.Add(my_hull);
-
+		
 		my_hull->SetPos(ChVector<>(ChRandom(), ChRandom(), ChRandom()) * 10);
 		my_hull->SetRot(ChQuaternion<>(ChRandom(), ChRandom(), ChRandom(), ChRandom()).GetNormalized() );
+		*/
 
 		// create a custom asset
 		auto shape_property = std::make_shared<MyProperty>();
-		shape_property->reflection = ChRandom()*100.33;
-		my_hull->AddAsset(shape_property);
+		shape_property->reflection = ChRandom()*0;
+		//my_hull->AddAsset(shape_property);
+		//msphereBody->AddAsset(shape_property);
+		my_sphere->AddAsset(shape_property);
+
+		double period = 2 * M_PI * pow(my_sphere->GetPos().x, 1.5) / sqrt(mu);
+
+		GetLog() << "mu: " << mu << "\n";
+		GetLog() << "period: " << period << "\n";
+		GetLog() << "central mass: " << msphereBody->GetMass() << "\n";
+		GetLog() << "orbiting mass: " << my_sphere->GetMass() << "\n";
 	}
 	
-
-
 
 
 	// Use this function for adding a ChIrrNodeAsset to all already created items (ex. a floor, a wall, etc.)
@@ -254,7 +282,8 @@ int main(int argc, char* argv[]) {
 	mphysicalSystem.Set_G_acc(ChVector<>(0, 0, 0));	//posizione forza di gravità
 
 	application.SetStepManage(true);
-	application.SetTimestep(0.01);
+	application.SetTimestep(2);
+
 
 	//
 	// THE SOFT-REAL-TIME CYCLE
@@ -262,13 +291,15 @@ int main(int argc, char* argv[]) {
 	ChStreamOutAsciiFile my_results("results.txt"); // apre un file
 	int save_each = 10;
 
-	while (application.GetDevice()->run()) {
+	double chronoTime = 0;
+	while (application.GetDevice()->run()) { //(chronoTime < 1000) {//
+		//chronoTime += 0.01;
 		application.GetVideoDriver()->beginScene(true, true, SColor(255, 140, 161, 192));
 
 		application.DrawAll();
 
 		// Create particle flow
-		emitter.EmitParticles(mphysicalSystem, application.GetTimestep());
+		//emitter.EmitParticles(mphysicalSystem, application.GetTimestep());
 
 		// Apply custom forcefield (brute force approach..)
 		// A) reset 'user forces accumulators':
@@ -278,8 +309,8 @@ int main(int argc, char* argv[]) {
 		}
 
 		// B) store user computed force:
-		// double G_constant = 6.674e-11; // gravitational constant
-		double G_constant = 6.674e-5;  // gravitational constant - HACK to speed up simulation
+		// double G_constant = 6.67384e-11; // gravitational constant
+		double G_constant = 6.67384e-11;  // gravitational constant - HACK to speed up simulation
 		for (unsigned int i = 0; i < mphysicalSystem.Get_bodylist()->size(); i++) {
 			auto abodyA = (*mphysicalSystem.Get_bodylist())[i];
 			for (unsigned int j = i + 1; j < mphysicalSystem.Get_bodylist()->size(); j++) {
@@ -312,7 +343,10 @@ int main(int argc, char* argv[]) {
 							<< abodyA->GetPos().z << " "
 							<< abodyA->GetPos_dt().x << " "
 							<< abodyA->GetPos_dt().y << " "
-							<< abodyA->GetPos_dt().z << " ";
+							<< abodyA->GetPos_dt().z << " "
+							<< abodyA->GetPos_dtdt().x << " "
+							<< abodyA->GetPos_dtdt().y << " "
+							<< abodyA->GetPos_dtdt().z << " ";
 					}
 				}
 			}
